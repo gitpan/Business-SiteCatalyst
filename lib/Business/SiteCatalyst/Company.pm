@@ -15,11 +15,11 @@ Business::SiteCatalyst::Company - Interface to Adobe Omniture SiteCatalyst's RES
 
 =head1 VERSION
 
-Version 1.2.0
+Version 1.2.1
 
 =cut
 
-our $VERSION = '1.2.0';
+our $VERSION = '1.2.1';
 
 
 =head1 SYNOPSIS
@@ -35,16 +35,19 @@ and have web services enabled within your account first in order to obtain a web
 services shared secret, as well as agree with the Terms and Conditions for using 
 the API.
 
+See SiteCatalyst API Explorer at
+https://developer.omniture.com/en_US/get-started/api-explorer
+for 'Company' module documentation
+	
+
 	use Business::SiteCatalyst;
 	
 	# Create an object to communicate with Adobe SiteCatalyst
 	my $site_catalyst = Business::SiteCatalyst->new(
 		username        => 'dummyusername',
 		shared_secret   => 'dummysecret',
+		api_subdomain   => 'api|api2', #optional; default value='api'
 	);
-	
-	# See SiteCatalyst API Explorer at https://developer.omniture.com/en_US/get-started/api-explorer
-	# for Company documentation
 	
 	my $company = $site_catalyst->instantiate_company();
 	
@@ -71,7 +74,8 @@ the API.
 Create a new Business::SiteCatalyst::Company object, which
 will allow retrieval of SiteCatalyst company-specific info.
 
-NOTE: This should not be called directly. Instead, use C<Business::SiteCatalyst->instantiate_company()>.
+NOTE: -This should not be called directly-. Instead, use 
+C<Business::SiteCatalyst->instantiate_company()>.
 
 	my $company = Business::SiteCatalyst::Company->new(
 		$site_catalyst,
@@ -103,7 +107,8 @@ sub new
 
 =head2 get_token_count()
 
-Determine the number of tokens left for your company. You are alloted 10,000 per month.
+Determine the number of tokens left for your company. You are alloted
+10,000 tokens per month.
 
 	my $tokens_left = $company->get_token_count();
 
@@ -121,6 +126,11 @@ sub get_token_count
 		data   => {'' => []}
 	);
 	
+	if ( !defined($response) )
+	{
+		croak "Fatal error. No response.";
+	}
+	
 	return $response;
 }
 
@@ -128,7 +138,8 @@ sub get_token_count
 
 =head2 get_token_usage()
 
-Information about the company's token usage for the current calendar month.
+Information about the company's token usage for the current calendar month,
+broken down by user account.
 
 	my $token_data = $company->get_token_usage();
 
@@ -145,6 +156,11 @@ sub get_token_usage
 		method => 'Company.GetTokenUsage',
 		data   => {'' => []}
 	);
+	
+	if ( !defined($response) )
+	{
+		croak "Fatal error. No response.";
+	}
 	
 	return $response;
 }
@@ -187,6 +203,11 @@ sub get_report_suites
 		data   => {'' => []}
 	);
 	
+	if ( !defined($response) || !defined($response->{'report_suites'}) )
+	{
+		croak "Fatal error. No response or 'report_suites' missing from response.";
+	}
+	
 	return $response->{'report_suites'};
 }
 
@@ -194,10 +215,13 @@ sub get_report_suites
 =head2 get_tracking_server()
 
 Returns the tracking server and namespace for the specified report suite.
-If report suite is not specified, 'report_suite_id' in SiteCatalystConfig will be used.
+If report suite is not specified, 'report_suite_id' in SiteCatalystConfig 
+(if one exists) will be used.
 
 	my $tracking_server = $company->get_tracking_server();
-	my $tracking_server = $company->get_tracking_server( report_suite_id => $report_suite_id );
+	my $tracking_server = $company->get_tracking_server( 
+		report_suite_id => $report_suite_id 
+	);
 
 Optional parameters:
 
@@ -239,6 +263,11 @@ sub get_tracking_server
 		data   => { 'rsid' => $args{'report_suite_id'} }
 	);
 	
+	if ( !defined($response) || !defined($response->{'tracking_server'}) )
+	{
+		croak "Fatal error. No response or missing tracking_server in response";
+	}
+	
 	return $response->{'tracking_server'};
 }
 
@@ -276,6 +305,11 @@ sub get_endpoint
 		data   => { 'company' => $args{'company'} }
 	);
 	
+	if ( !defined($response) )
+	{
+		croak "Fatal error. No response.";
+	}
+	
 	return $response;
 }
 
@@ -284,7 +318,7 @@ sub get_endpoint
 
 Returns queued items that are pending approval for the requesting company.
 
-	my $report_suites = $company->get_queue();
+	my $queue_list = $company->get_queue();
 
 
 =cut
@@ -300,6 +334,11 @@ sub get_queue
 		data   => {'' => []}
 	);
 	
+	if ( !defined($response) )
+	{
+		croak "Fatal error. No response.";
+	}
+
 	return $response;
 }
 
@@ -336,13 +375,18 @@ sub cancel_queue_item
 		data   => { 'qid' => $args{'queue_id'} }
 	);
 	
+	if ( !defined($response) )
+	{
+		croak "Fatal error. No response.";
+	}
+
 	return $response eq 'true' ? 1 : 0;
 }
 
 
 =head2 get_version_access()
 
-Information about the version of various Adobe services your company has access to.
+Information about the version of various Adobe services you have access to.
 
 	my $version_list = $company->get_version_access();
 
@@ -360,6 +404,11 @@ sub get_version_access
 		data   => {'' => []}
 	);
 	
+	if ( !defined($response) )
+	{
+		croak "Fatal error. No response.";
+	}
+
 	return $response;
 }
 
@@ -410,8 +459,9 @@ L<http://search.cpan.org/dist/Business-SiteCatalyst/>
 =head1 ACKNOWLEDGEMENTS
 
 Thanks to ThinkGeek (L<http://www.thinkgeek.com/>) and its corporate overlords
-at Geeknet (L<http://www.geek.net/>), for footing the bill while I write code for them!
-Special thanks for technical help from fellow ThinkGeek CPAN author Guillaume Aubert L<http://search.cpan.org/~aubertg/>
+at Geeknet (L<http://www.geek.net/>), for footing the bill while I write 
+code for them! Special thanks for technical help from fellow ThinkGeek CPAN
+author Guillaume Aubert L<http://search.cpan.org/~aubertg/>
 
 
 =head1 COPYRIGHT & LICENSE

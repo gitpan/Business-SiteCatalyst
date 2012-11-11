@@ -15,11 +15,11 @@ Business::SiteCatalyst::Report - Interface to Adobe Omniture SiteCatalyst's REST
 
 =head1 VERSION
 
-Version 1.2.0
+Version 1.2.1
 
 =cut
 
-our $VERSION = '1.2.0';
+our $VERSION = '1.2.1';
 
 
 =head1 SYNOPSIS
@@ -32,7 +32,7 @@ data (feature not implemented yet), etc.
 
 Please note that you will need to have purchased the Adobe SiteCatalyst product,
 and have web services enabled within your account first in order to obtain a web
-services shared secret, as well as agree with the Terms and Conditions for using 
+services shared secret, as well as agree with the Terms and Conditions for using
 the API.
 
 	use Business::SiteCatalyst;
@@ -41,6 +41,7 @@ the API.
 	my $site_catalyst = Business::SiteCatalyst->new(
 		username        => 'dummyusername',
 		shared_secret   => 'dummysecret',
+		api_subdomain   => 'api|api2', #optional; default value='api'
 	);
 	
 	my $report = $site_catalyst->instantiate_report(
@@ -48,8 +49,10 @@ the API.
 		report_suite_id => 'report suite id',
 	);
 	
-	# See SiteCatalyst API Explorer at https://developer.omniture.com/en_US/get-started/api-explorer
+	# See SiteCatalyst API Explorer at
+	# https://developer.omniture.com/en_US/get-started/api-explorer
 	# for Report.Queue[Trended|Ranked|Overtime] documentation
+	
 	$report->queue(
 		%report_arguments, #report-dependant
 	);
@@ -170,7 +173,8 @@ sub queue
 	my ( $self, %args ) = @_;
 	
 	my $site_catalyst = $self->get_site_catalyst();
-	
+	my $verbose = $site_catalyst->verbose();
+
 	my $response = $site_catalyst->send_request(
 		method => 'Report.Queue' . $self->{'type'},
 		data   =>
@@ -183,6 +187,16 @@ sub queue
 		}
 	);
 	
+	if ( !defined($response) )
+	{
+		croak "Fatal error. No response.";
+	}
+	elsif ( !defined($response->{'reportID'}) )
+	{
+		carp "Full response: " . Dumper($response) if $verbose;
+		croak "Fatal error. Missing reportID in response.";
+	}
+
 	# Store report id; we'll need it to check the status
 	$self->{'id'} = $response->{'reportID'};
 	
@@ -225,6 +239,7 @@ sub is_ready
 	
 	return $response->{'status'} eq 'done' ? 1 : 0;
 }
+
 
 =head2 retrieve()
 
@@ -295,9 +310,8 @@ sub cancel
 	{
 		croak "Fatal error. No response.";
 	}
-
+	
 	return $response;
-
 }
 
 
@@ -305,7 +319,7 @@ sub cancel
 
 Get Business::SiteCatalyst object used when creating the current object.
 
-	$report->get_site_catalyst();
+	my $site_catalyst = $report->get_site_catalyst();
 
 =cut
 
@@ -316,11 +330,12 @@ sub get_site_catalyst
 	return $self->{'site_catalyst'};
 }
 
+
 =head2 get_id()
 
 Get the report ID returned by Adobe SiteCatalyst when we queued the report.
 
-	$report->get_id()
+	my $report_id = $report->get_id();
 
 =cut
 
