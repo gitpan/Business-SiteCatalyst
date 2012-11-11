@@ -13,7 +13,18 @@ use DateTime qw();
 use Digest::SHA1 qw();
 use MIME::Base64 qw();
 
+use Business::SiteCatalyst::Company;
 use Business::SiteCatalyst::Report;
+
+
+# Some API methods return strings or numbers rather than valid JSON.
+# This list is used to return the raw response to the caller instead of decoding output as JSON
+my %METHODS_RETURNING_INVALID_JSON = 
+(
+	'Company.GetEndpoint'   => 1,  # Returns string
+	'Company.GetTokenCount' => 1,  # Returns number
+	'Report.CancelReport'   => 1,  # Returns number
+);
 
 
 =head1 NAME
@@ -23,24 +34,32 @@ Business::SiteCatalyst - Interface to Adobe Omniture SiteCatalyst's REST API.
 
 =head1 VERSION
 
-Version 1.0.1
+Version 1.2.0
 
 =cut
 
-our $VERSION = '1.0.1';
-
-our $WEB_SERVICE_URL = 'https://api.omniture.com/admin/1.3/rest/?method=';
+our $VERSION = '1.2.0';
 
 
 =head1 SYNOPSIS
 
-This module allows you to interact with Adobe Omniture SiteCatalyst, an analytics
-Service Provider. It encapsulates all the communications with the API provided 
-by Adobe SiteCatalyst to offer a Perl interface for all SiteCatalyst-related APIs.
+This module allows you to interact with Adobe (formerly Omniture) SiteCatalyst,
+a web analytics service. It encapsulates all the communications with the API 
+provided by Adobe SiteCatalyst to offer a Perl interface for managing reports,
+pulling company-specific SiteCatalyst data (ex: token usage), uploading SAINT 
+data (feature not implemented yet), etc.
 
 Please note that you will need to have purchased the Adobe SiteCatalyst product,
-and have web services enabled first in order to obtain a web services shared
-secret, as well as agree with the Terms and Conditions for using the API.
+and have web services enabled within your account first in order to obtain a web
+services shared secret, as well as agree with the Terms and Conditions for using 
+the API.
+
+NOTE: the 'api_subdomain' option/config variable is utilized for the api url.
+To determine your specific API URL/Endpoint, please visit
+https://developer.omniture.com/en_US/get-started/api-explorer
+Most users won't need to set this variable unless the default causes errors.
+Ex: https://$api_subdomain.omniture.com/admin/1.3/rest/?
+
 
 	use Business::SiteCatalyst;
 	
@@ -48,6 +67,7 @@ secret, as well as agree with the Terms and Conditions for using the API.
 	my $site_catalyst = Business::SiteCatalyst->new(
 		username        => 'dummyusername',
 		shared_secret   => 'dummysecret',
+		api_subdomain   => 'api|api2', #optional; default value='api'
 	);
 
 
@@ -61,6 +81,7 @@ Adobe SiteCatalyst's API
 	my $site_catalyst = Business::SiteCatalyst->new(
 		username        => 'dummyusername',
 		shared_secret   => 'dummysecret',
+		api_subdomain   => 'api2', #optional - default = 'api'
 	);
 
 Creates a new object to communicate with Adobe SiteCatalyst.
@@ -83,11 +104,18 @@ sub new
 	
 	#Defaults.
 	
+	# NOTE - some users connect to api2.omniture.com, so the subdomain portion of the host is configurable
+	# in the 'api_subdomain' config variable in SiteCatalystConfig.pm
+	my $webservice_url = 'https://' .
+		( defined $args{'api_subdomain'} ? $args{'api_subdomain'} : 'api' ) .
+		'.omniture.com/admin/1.3/rest/?method=';
+	
 	# Create the object
 	my $self = bless(
 		{
 			username        => $args{'username'},
 			shared_secret   => $args{'shared_secret'},
+			webservice_url  => $webservice_url,
 		},
 		$class,
 	);
@@ -145,6 +173,27 @@ sub instantiate_report
 }
 
 
+
+=head2 instantiate_company()
+
+Create a new Business::SiteCatalyst::Company object, which
+will allow retrieval of company-specific SiteCatalyst data.
+
+	my $company = $site_catalyst->instantiate_company();
+
+	
+Parameters: none
+
+=cut
+
+sub instantiate_company
+{
+	my ( $self, %args ) = @_;
+	
+	return Business::SiteCatalyst::Company->new( $self, %args );
+}
+
+
 =head1 INTERNAL METHODS
 
 =head2 send_request()
@@ -164,6 +213,7 @@ sub send_request
 	my ( $self, %args ) = @_;
 	
 	my $verbose = $self->verbose();
+	my $url = $self->{'webservice_url'} .  $args{'method'};
 	
 	# Check for mandatory parameters
 	foreach my $arg ( qw( method data ) )
@@ -171,8 +221,6 @@ sub send_request
 		croak "Argument '$arg' is needed to send a request with the Business::SiteCatalyst object"
 			if !defined( $args{$arg} ) || ( $args{$arg} eq '' );
 	}
-	
-	my $url = $WEB_SERVICE_URL . $args{'method'};
 	
 	my $json_in = JSON::encode_json( $args{'data'} );
 	carp "Sending JSON request >" . ( defined( $json_in ) ? $json_in : '' ) . "<"
@@ -209,9 +257,20 @@ sub send_request
 	carp "Response >" . ( defined( $response ) ? $response->content() : '' ) . "<"
 		if $verbose;
 
-	my $json_out = JSON::decode_json( $response->content() );
+	my $json_out;
+	
+	if ( exists( $METHODS_RETURNING_INVALID_JSON{ $args{'method'} } ) )
+	{
+		$json_out = $response->content();
+	}
+	else
+	{
+		$json_out = JSON::decode_json( $response->content() );
+	}
+	
 	carp "JSON Response >" . ( defined( $json_out ) ? Dumper($json_out) : '' ) . "<"
 		if $verbose;
+	
 	return $json_out;
 }
 
