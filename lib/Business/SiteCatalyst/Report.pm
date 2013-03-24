@@ -15,11 +15,11 @@ Business::SiteCatalyst::Report - Interface to Adobe Omniture SiteCatalyst's REST
 
 =head1 VERSION
 
-Version 1.2.1
+Version 1.2.2
 
 =cut
 
-our $VERSION = '1.2.1';
+our $VERSION = '1.2.2';
 
 
 =head1 SYNOPSIS
@@ -399,7 +399,7 @@ Special thanks for technical help from fellow ThinkGeek CPAN author Guillaume Au
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2012 Jennifer Pinkham.
+Copyright 2013 Jennifer Pinkham.
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the Artistic License.
